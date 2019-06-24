@@ -1,0 +1,220 @@
+#include <stdint.h>
+#include <sys/io.h>
+#include <iostream>
+#include "PCM3718.h"
+
+#define B_5 0x00
+#define B_05 0x01
+#define B_005 0x02
+#define B_0005 0x03
+
+#define U_10 0x04
+#define U_1 0x05
+#define U_01 0x06
+#define U_001 0x07
+
+#define B_10 0x08
+#define B_1 0x09
+#define B_01 0x0A
+#define B_001 0x0B
+
+#define MAX_BITS 4095
+
+EmbeddedDevice::PCM3718::PCM3718(EmbeddedOperations* eops, uint32_t base_addr) {
+	PCM_BASE = base_addr;
+	this -> eops = eops;  //pointer
+
+	if (eops -> ioperm(PCM_BASE, 16, 1) != 0) {
+		std::cout << "fail perm" << std::endl;
+	}
+}
+
+EmbeddedDevice::PCM3718::PCM3718(EmbeddedOperations* eops, uint32_t base_addr, uint8_t analog_range) {
+	PCM_BASE = base_addr;
+	this -> eops = eops;  //pointer
+	PCM_RANGE = analog_range;
+
+	if (eops->ioperm(PCM_BASE, 16, 1) != 0) { 
+		std::cout << "fail perm" << std::endl;
+	}
+}
+
+EmbeddedDevice::PCM3718::~PCM3718() {  //Deconstructor
+}
+
+//PCM3718 Functions
+
+//read in the high and low byte input, combine them and return the result
+uint16_t EmbeddedDevice::PCM3718::digitalInput() {
+	//16 bit for the purpose of combining later
+	uint8_t LowB = eops->inb(PCM_BASE + 0x0003);//low
+	uint8_t HighB = eops->inb(PCM_BASE + 0x000B);  //high
+	uint16_t TempShift = (HighB << 8); //shift 8 bits of high byte
+	uint16_t Combine_Result = TempShift | LowB; //combine with low byte
+	return Combine_Result;
+}
+
+//return the byte as determined by the input argument (1 = high byte, 0 = low byte)
+uint8_t EmbeddedDevice::PCM3718::digitalByteInput(bool high_byte) {
+	uint8_t Byte_Result;
+	if (high_byte == 1) {
+		Byte_Result = eops->inb(PCM_BASE + 0x0B);
+	}
+	else if(high_byte == 0){
+		Byte_Result = eops->inb(PCM_BASE + 0x03);
+	}
+	return Byte_Result;
+}
+
+//Return the value of the bit as determined by the input argument (value between 0-15)
+bool EmbeddedDevice::PCM3718::digitalBitInput(uint8_t bit) {
+	//Right shifting ID by position -> furthest spot to the right. 
+	//Combining that with bitwise AND (&) with 1 will inform if the bit is set.
+	uint16_t Value;
+	uint16_t Result_Value;
+
+	Value = digitalInput(); //function from earlier to read and combine high and low bytes
+	Value = (Value >> bit);  //shift to right
+	Result_Value = Value & 0x0001; // 1 if set, 0 if no set 
+	return Result_Value;
+}
+
+//Output the provided value to both low and high channels
+void EmbeddedDevice::PCM3718::digitalOutput(uint16_t value){
+	//Set and organise bits
+	uint8_t Set_Low = value & 0x00FF; //only consider bottom 8 bits
+	uint8_t Set_High = (value >> 8);
+	//Move into 8 bit 
+	uint8_t L_Value = Set_Low;
+	uint8_t H_Value = Set_High;
+	//output
+	eops->outb(L_Value, PCM_BASE + 0x03);
+	eops->outb(H_Value, PCM_BASE + 0x0B);
+}
+
+//Output the provided value to the channel determined by the boolean input (1 = high byte, 0 = low byte)
+void EmbeddedDevice::PCM3718::digitalByteOutput(bool high_byte, uint8_t value) {
+	if (high_byte == 1) {  //high byte is 1
+		eops->outb(value, PCM_BASE + 0x0B);
+	}
+	else {   //high byte is 0
+		eops->outb(value, PCM_BASE + 0x03);
+	}
+}
+
+//Change the range for analog input to be the provided rangeCode (look in manual for range definitions)
+void EmbeddedDevice::PCM3718::setRange(uint8_t new_analog_range) {
+	//Don't do any I/O operations
+	this->PCM_RANGE = new_analog_range;
+}
+
+//CHECKED BY LIAM
+
+//Receive the input in the analog channel provided, convert it to a voltage (determined by the setRange) and return it
+double EmbeddedDevice::PCM3718::analogInput(uint8_t channel) const {
+	//must be able to be any channel
+	// you can select the channel and then use that stored range to set the range for just that channel. 
+	
+	double voltage;
+	bool polarity; //Bipolar is 1, Unipolar is 0
+	double Range_Max;
+	uint8_t chan;
+	double gradient;
+	uint8_t Range = GetRange(); //returns range value
+
+	//Read input
+	//select channel
+	chan = channel | (channel << 4);
+	eops->outb(chan, PCM_BASE + 0x02);
+	//Sleep
+	usleep(5000); 
+	eops->outb(0x00, PCM_BASE + 0x00); //trigger conversion
+	// Wait for conversion to complete
+	while (eops->inb(PCM_BASE + 0x08) & 0x80);
+
+	//Sleep
+	usleep(5000);
+
+	uint16_t LowB = eops->inb(PCM_BASE + 0x00);	//Read low
+	uint16_t HighB = eops->inb(PCM_BASE + 0x01); 	//Read high
+	uint16_t Input_Contents = (LowB >> 4) | (HighB << 4); //combine low and high bytes
+
+//Determine max values for different input ranges set earlier
+//Check Bipolar
+	if (Range == (B_5 | B_05 | B_005 | B_0005 | B_10 | B_1 | B_01 | B_001)) {
+		polarity = 1;
+		switch (Range) {
+		case B_5:
+			Range_Max = 5;
+			break;
+		case B_05:
+			Range_Max = 0.5;
+			break;
+		case B_005:
+			Range_Max = 0.05;
+			break;
+		case B_0005:
+			Range_Max = 0.005;
+			break;
+		case B_10:
+			Range_Max = 10;
+			break;
+		case B_1:
+			Range_Max = 1;
+			break;
+		case B_01:
+			Range_Max = 0.1;
+			break;
+		case B_001:
+			Range_Max = 0.01;
+			break;
+		}
+	} //Check Unipolar
+	else if (Range == (U_10 | U_1 | U_01 | U_001)) {
+		polarity = 0;
+		switch (Range) {
+		case U_10:
+			Range_Max = 10;
+			break;
+		case U_1:
+			Range_Max = 1;
+			break;
+		case U_01:
+			Range_Max = 0.1;
+			break;
+		case U_001:
+			Range_Max = 0.01;
+			break;
+		}
+	}
+
+	//use range code and input from channel
+	//using calibration curve
+	//Utilise calibration curve to calculate Voltage
+	//Convert to voltage
+
+	if (polarity == 1) {
+		gradient = (2 * Range_Max) / MAX_BITS;  //split up to different slices (4095 slices)
+		voltage = (Input_Contents * gradient) - Range;
+	}
+	else if (polarity == 0) {
+		gradient = Range_Max / MAX_BITS;
+		voltage = Input_Contents * gradient;
+	}
+
+	//return voltage
+	return voltage;
+}
+
+//Have it output in the following style, with voltages displayed to 2 d.p. "channel 1: <channel 1 voltage>\tchannel 2: <channel 2 voltage>\n"
+std::ostream& EmbeddedDevice::operator<<(std::ostream & output, const EmbeddedDevice::PCM3718 & pcm) {
+	//"channel 1: X  channel 2: Y"
+	std::cout << "Channel 0:" << pcm.analogInput(0);
+	std::cout << "	Channel 1:" << pcm.analogInput(1) << std::endl;
+}
+
+
+//Return the range
+uint8_t EmbeddedDevice::PCM3718::GetRange() const{
+	return PCM_RANGE;
+}
