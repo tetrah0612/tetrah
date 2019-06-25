@@ -28,15 +28,21 @@ void EmbeddedDevice::DAC06::analogOutputRaw(uint8_t channel, uint16_t value) {
 	// 8 bits (low) -> 4 bits (high nibble) =  12 bits
 
 	//8 bits for LS
-	uint8_t temp1 = (value >> 4);
-	uint8_t LS_Byte = temp1;
-	//4 bits for MS
-	uint8_t temp2 = (value >> 8);
-	uint8_t MS_Nibble = temp2;
 
-	//write
-	eops->outb(LS_Byte, DAC_BASE + (channel * 2));
-	eops->outb(MS_Nibble, DAC_BASE + (channel * 2) + 1);
+	if (channel < 6) {
+		uint8_t temp1 = (value >> 4);
+		uint8_t LS_Byte = temp1;
+		//4 bits for MS
+		uint8_t temp2 = (value >> 8);
+		uint8_t MS_Nibble = temp2;
+
+		//write
+		eops->outb(LS_Byte, DAC_BASE + (channel * 2));
+		eops->outb(MS_Nibble, DAC_BASE + (channel * 2) + 1);
+	}
+	else {
+		std::cout << "Incorrect channel input. Accepts channels 0 to 5" << std::endl;
+	}
 }
 
 //Output the desired voltage provided to the specified channel in the DAC
@@ -48,7 +54,11 @@ void EmbeddedDevice::DAC06::analogOutputVoltage(uint8_t channel, double desired_
 	//FSV / 4096 * CODE − .5 * FSV or CODE = (OutV + .5 * FSV) / FSV * 4096
 	//refer to manual
 
-	uint16_t value = ((desired_voltage + (0.5*10))/10)*4095;	
-
-	analogOutputRaw(channel, value);
+	if (channel < 6) {
+		uint16_t value = ((desired_voltage + (0.5 * 10)) / 10) * 4095;
+		analogOutputRaw(channel, value);
+	}
+	else {
+		std::cout << "Incorrect channel input. Accepts channels 0 to 5" << std::endl;
+	}
 }

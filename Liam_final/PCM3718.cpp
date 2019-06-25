@@ -119,8 +119,6 @@ void EmbeddedDevice::PCM3718::setRange(uint8_t new_analog_range) {
 	this->PCM_RANGE = new_analog_range;
 }
 
-//CHECKED BY LIAM
-
 //Receive the input in the analog channel provided, convert it to a voltage (determined by the setRange) and return it
 double EmbeddedDevice::PCM3718::analogInput(uint8_t channel) const {
 	//must be able to be any channel
@@ -133,88 +131,97 @@ double EmbeddedDevice::PCM3718::analogInput(uint8_t channel) const {
 	double gradient;
 	uint8_t Range = GetRange(); //returns range value
 
-	//Read input
-	//select channel
-	chan = channel | (channel << 4);
-	eops->outb(chan, PCM_BASE + 0x02);
-	//Sleep
-	usleep(5000); 
-	eops->outb(0x00, PCM_BASE + 0x00); //trigger conversion
-	// Wait for conversion to complete
-	while (eops->inb(PCM_BASE + 0x08) & 0x80);
 
-	//Sleep
-	usleep(5000);
+	//READING
+	if (channel < 2) {
+		//Set range
+		outb(Range, PCM_BASE + 0x01);
+		//select channel
+		chan = channel | (channel << 4);
+		eops->outb(chan, PCM_BASE + 0x02);
+		//Sleep 0.1s
+		usleep(100000000);
+		eops->outb(0x00, PCM_BASE + 0x00); //trigger conversion
+		// Wait for conversion to complete
+		while (eops->inb(PCM_BASE + 0x08) & 0x80);
+		//Sleep
+		usleep(5000);
+		//read high and low and combine
+		uint16_t LowB = eops->inb(PCM_BASE + 0x00);	//Read low
+		uint16_t HighB = eops->inb(PCM_BASE + 0x01); 	//Read high
+		uint16_t Input_Contents = (LowB >> 4) | (HighB << 4); //combine low and high bytes
 
-	uint16_t LowB = eops->inb(PCM_BASE + 0x00);	//Read low
-	uint16_t HighB = eops->inb(PCM_BASE + 0x01); 	//Read high
-	uint16_t Input_Contents = (LowB >> 4) | (HighB << 4); //combine low and high bytes
-
-//Determine max values for different input ranges set earlier
-//Check Bipolar
-	if (Range == (B_5 | B_05 | B_005 | B_0005 | B_10 | B_1 | B_01 | B_001)) {
-		polarity = 1;
-		switch (Range) {
-		case B_5:
-			Range_Max = 5;
-			break;
-		case B_05:
-			Range_Max = 0.5;
-			break;
-		case B_005:
-			Range_Max = 0.05;
-			break;
-		case B_0005:
-			Range_Max = 0.005;
-			break;
-		case B_10:
-			Range_Max = 10;
-			break;
-		case B_1:
-			Range_Max = 1;
-			break;
-		case B_01:
-			Range_Max = 0.1;
-			break;
-		case B_001:
-			Range_Max = 0.01;
-			break;
+	//CONVERTING TO VOLTAGE
+	//Determine max values for different input ranges set earlier
+	//Check Bipolar
+		if (Range == (B_5 | B_05 | B_005 | B_0005 | B_10 | B_1 | B_01 | B_001)) {
+			polarity = 1;
+			switch (Range) {
+			case B_5:
+				Range_Max = 5;
+				break;
+			case B_05:
+				Range_Max = 0.5;
+				break;
+			case B_005:
+				Range_Max = 0.05;
+				break;
+			case B_0005:
+				Range_Max = 0.005;
+				break;
+			case B_10:
+				Range_Max = 10;
+				break;
+			case B_1:
+				Range_Max = 1;
+				break;
+			case B_01:
+				Range_Max = 0.1;
+				break;
+			case B_001:
+				Range_Max = 0.01;
+				break;
+			}
+		} //Check Unipolar
+		else if (Range == (U_10 | U_1 | U_01 | U_001)) {
+			polarity = 0;
+			switch (Range) {
+			case U_10:
+				Range_Max = 10;
+				break;
+			case U_1:
+				Range_Max = 1;
+				break;
+			case U_01:
+				Range_Max = 0.1;
+				break;
+			case U_001:
+				Range_Max = 0.01;
+				break;
+			}
 		}
-	} //Check Unipolar
-	else if (Range == (U_10 | U_1 | U_01 | U_001)) {
-		polarity = 0;
-		switch (Range) {
-		case U_10:
-			Range_Max = 10;
-			break;
-		case U_1:
-			Range_Max = 1;
-			break;
-		case U_01:
-			Range_Max = 0.1;
-			break;
-		case U_001:
-			Range_Max = 0.01;
-			break;
+
+		//use range code and input from channel
+		//using calibration curve
+		//Utilise calibration curve to calculate Voltage
+		//Convert to voltage
+
+		if (polarity == 1) {
+			gradient = (2 * Range_Max) / MAX_BITS;  //split up to different slices (4095 slices)
+			voltage = (Input_Contents * gradient) - Range;
 		}
+		else if (polarity == 0) {
+			gradient = Range_Max / MAX_BITS;
+			voltage = Input_Contents * gradient;
+		}
+
+		//return voltage
+		return voltage;
+	}
+	else {
+		std::cout << "Incorrect channel input.  Accepts channels 0 to 1." << std::endl;
 	}
 
-	//use range code and input from channel
-	//using calibration curve
-	//Utilise calibration curve to calculate Voltage
-	//Convert to voltage
-
-	if (polarity == 1) {
-		gradient = (2 * Range_Max) / MAX_BITS;  //split up to different slices (4095 slices)
-		voltage = (Input_Contents * gradient) - Range;
-	}
-	else if (polarity == 0) {
-		gradient = Range_Max / MAX_BITS;
-		voltage = Input_Contents * gradient;
-	}
-
-	//return voltage
-	return voltage;
 }
 
 //Have it output in the following style, with voltages displayed to 2 d.p. "channel 1: <channel 1 voltage>\tchannel 2: <channel 2 voltage>\n"
