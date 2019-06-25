@@ -1,4 +1,4 @@
-#include <stdint.h>
+﻿#include <stdint.h>
 #include <iostream>
 #include <sys/io.h>
 #include "EmbeddedOperations.h"
@@ -44,6 +44,8 @@ void EmbeddedDevice::DAC06::analogOutputRaw(uint8_t channel, uint16_t value) {
 void EmbeddedDevice::DAC06::analogOutputVoltage(uint8_t channel, double desired_voltage) {
 	//DAC set at standard +-5V Range
 	//gradient = 10 / MAX_BIT; //from -5 to +5
+	//The BIPOLAR transfer function for the DAC is :
+	//FSV / 4096 * CODE − .5 * FSV or CODE = (OutV + .5 * FSV) / FSV * 4096
 	//refer to manual
 
 	uint16_t value = ((desired_voltage + (0.5*10))/10)*4095;	
