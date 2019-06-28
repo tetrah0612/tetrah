@@ -11,7 +11,12 @@ EmbeddedDevice::MSIP404::MSIP404(EmbeddedOperations* eops, uint32_t base_addr) {
 	this->eops = eops;
 	BASE_MSIP = base_addr;
 
-	if (eops->ioperm(BASE_MSIP, 16, 1) != 0) {
+	//base 0x200
+	if (eops->ioperm(BASE_MSIP, 32, 1) != 0) {
+		std::cout << "fail perm" << std::endl;
+	}
+	//base 0x800
+	if (eops->ioperm(Index_addr, 16, 1) != 0) {
 		std::cout << "fail perm" << std::endl;
 	}
 }
@@ -23,12 +28,16 @@ EmbeddedDevice::MSIP404::~MSIP404(){
 //Reset the channel determined by the input value
 void EmbeddedDevice::MSIP404::resetChannel(uint8_t channel) {
 	//page 6 of Manual
-	eops->outb(0x00, BASE_MSIP + channel);
+	if (channel < 8) {
+		eops->outb(0x00, BASE_MSIP + channel);
+	} else {
+		std::cout << "Wrong input. Only channels 0 to 7." << std::endl;	
+	}
 }
 
 //Read the channel determined by the input value
 //You are expected to be able to read channels 0-7. Assume the same pattern as channel 0-3 for channels 4-7.
-//DONE: TESTED
+//DONE: ~
 int32_t EmbeddedDevice::MSIP404::readChannel(uint8_t channel) {
 	// 8 channels
 	//each channel has 4 bytes
@@ -56,41 +65,49 @@ int32_t EmbeddedDevice::MSIP404::readChannel(uint8_t channel) {
 //Read the index bit for the channel determined by the input value
 //You may assume the encoder index pulse base address is always 0x800.
 //You are expected to read the index pulses for channels 0-2 ONLY
-//DONE: xxx
+//DONE: TESTED
 bool EmbeddedDevice::MSIP404::readIndex(uint8_t channel) {
 	//Port to read index is 0x800
-	uint32_t Read_Value;
-	bool Result;
+	uint16_t Read_Value;
+	uint16_t Find_Bit;
+	uint16_t Shifted_Result;
+	uint16_t Result;
 
 	if (channel < 3) {
 		switch (channel) {
 		case 0: //if channel 0
 			//read index value
 			Read_Value = eops->inb(Index_addr);
-			//bit mask to select only the bit 7
-			Result = Read_Value & 0x80;
+			//shift to move bit 7 to bit 0 then return bool
+			Find_Bit = Read_Value & 0x80;
+			Shifted_Result = (Find_Bit >> 7) & 0x1;
+			Result = Shifted_Result;
 			break;
 		case 1:
 			Read_Value = eops->inb(Index_addr);
-			//bit mask to select only the bit 5 
-			Result = Read_Value & 0x20;
+			//shift to move bit 5 to bit 0 then return bool
+			Find_Bit = Read_Value & 0x20;
+			Shifted_Result = (Find_Bit >> 5) & 0x1;
+			Result = Shifted_Result;
 			break;
 		case 2:
 			Read_Value = eops->inb(Index_addr + 1);
-			//bit mask to select only the bit 7
-			Result = Read_Value & 0x80;
+			//shift to move bit 7 to bit 0 then return bool
+			Find_Bit = Read_Value & 0x80;
+			Shifted_Result = (Find_Bit >> 7) & 0x1;
+			Result = Shifted_Result;
 			break;
 		}
 		return Result;
 	}
 	else {
-		std::cout << "Wrong input. Only channels 0 to 1." << std::endl;
+		std::cout << "Wrong input. Only channels 0 to 2." << std::endl;
 		return 0;
 	}
 }
 
 //Reset all (8) channels
-//DONE: xxx
+//DONE: ~
 bool EmbeddedDevice::MSIP404::operator!() {
 	int count = 0;
 	int channel_num = 0;

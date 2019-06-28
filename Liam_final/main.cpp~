@@ -9,12 +9,9 @@
 int main() {
 
 	EmbeddedOperations eops;
-	
-         //in constructors
-	//this->eops = eops;
 
  	EmbeddedDevice::PCM3718 pcm(&eops, 0x300);
-// 	EmbeddedDevice::MSIP404 msi(&eops, 0x200);
+ //	EmbeddedDevice::MSIP404 msi(&eops, 0x200);
 //	EmbeddedDevice::DAC06   dac(&eops, 0x320);
 
 	std::cout << "testing mains functions.\n";
@@ -41,7 +38,7 @@ int main() {
 // 		std::cout << "input seems correct" << std::endl;
 // 	}
 
-//DONW:tested 
+	//DONE
 // 	if (pcm.digitalBitInput(0)) {
 // 		std::cout << "Bit zero was on" << std::endl;
 // 	}
@@ -75,15 +72,15 @@ int main() {
 
 /////////////////////////////////////
 
-//      //set range for +-5v
-// 	pcm.setRange(0);
-// 
-// 	std::cout << "analog input for channel 0 is " << pcm.analogInput(0) << std::endl;
-// 
-// 	std::cout << pcm << std::endl;
-// 
-// 	std::cout << "sleeping" << std::endl;
-// 	usleep(5000000);
+     //set range for +-5v
+	//pcm.setRange(0);
+/*
+	std::cout << "analog input for channel 0 is " << pcm.analogInput(0) << std::endl;
+
+	std::cout << pcm << std::endl;
+
+	std::cout << "sleeping" << std::endl;
+	usleep(5000000);*/
 
 /////////////////////////////////////
 
@@ -103,26 +100,30 @@ int main() {
 
 //Receive analog input from PCM and then return and print as voltage.
 
-      	std::cout << "outputting 0xFF to high byte (channel 1)" << std::endl;
-	pcm.digitalByteOutput(1, 0xFF); //high
-
-	std::cout << "outputting 0x0 to low byte (channel 0)" << std::endl;
-	pcm.digitalByteOutput(0, 0x0); //low
-
-
-        //set range for +-5v
-// 	pcm.setRange(0);
+	//output to lcd
+// 	pcm.digitalOutput(0xFF00);
 // 
-// 	std::cout << "analog input for channel 0 is " << pcm.analogInput(0) << std::endl;
-// 	std::cout << "analog input for channel 0 is " << pcm.analogInput(1) << std::endl;
-
+//         //set range for +-5v
+// 	pcm.setRange(0x4);
+// 
+// 	//std::cout << "analog input for channel 0 is " << pcm.analogInput(0) << std::endl;
+// //	std::cout << "analog input for channel 1 is " << pcm.analogInput(1) << std::endl;
+// 
 // 	std::cout << pcm << std::endl;
-// 
-// 	std::cout << "sleeping" << std::endl;
-// 	usleep(5000000);
+
 /////////////////////////////////////
+	int range = 0;
+	while(range <= 11){
+		std::cout << "range" << range << std::endl;
+		//for (int i = 0; i < 5; i++) {
+			pcm.digitalOutput(0xFF00);
+			pcm.setRange(range);
+			std::cout <<pcm;
+			usleep(1000);
+		//}
+		range++;
 
-
+	}
 
 
 
@@ -145,33 +146,46 @@ int main() {
 
 
 //////////////
-//MSI
+//MSI //DONE
 /////////////
-	//Done
+
+	//DONE
 //  	usleep(5000000);
 //  	std::cout << "reset channel 0" << std::endl;
 //  	msi.resetChannel(0);
-// 
-// 	std::cout << "printing encoder every 0.1 seconds for the next 10 seconds\n";
+//  
+// 	std::cout << "printing encoder every 0.1 seconds for the next 10 seconds and checking for index pulse\n";
+// 	
 // 	usleep(5000000);
+// 
 // 	for (int i = 0; i < 100; i++) {
-// 		std::cout << msi.readChannel(0) << std::endl;
+// 		
+//  		if(msi.readIndex(0) == 1){
+// 				std::cout << "Index pulse detected "<< std::endl;
+// 				msi.resetChannel(0);
+// 				std::cout << msi.readChannel(0) << std::endl;
+//  
+// 		} else {
+// 
+//  			std::cout << msi.readChannel(0) << std::endl;
+// 		}
+// 
 // 		usleep(100000);
 // 	}
 
-	//std::cout << "checking index pulse the next period\n";
-	//usleep(5000000);
-	//bool pulse = false;
-	//for (int i = 0; i < 1000000; i++) {
-	//	if (msi.readindex(0)) {
-	//		pulse = true;
-	//		break;
-	//	}
-	//}
-	//std::cout << "index pulse detected " << pulse << std::endl;
+// 	std::cout << "checking index pulse the next period\n";
+// 	usleep(5000000);
+// 	bool pulse = false;
+// 	for (int i = 0; i < 1000000; i++) {
+// 		if (msi.readindex(0) == 1) {
+// 			pulse = true;
+// 			break;
+// 		}
+// 	}
+// 	std::cout << "index pulse detected " << pulse << std::endl;
 	
-	//fix
-// 	for (int i = 0; i < 100; i++) {
+/////////////////////////
+// 	while(1) {
 // 		
 // 		if(msi.readIndex(0) == 1){
 // 				std::cout << "Index pulse detected "<< std::endl;
@@ -181,13 +195,14 @@ int main() {
 // 
 // 			std::cout << msi.readChannel(0) << std::endl;
 // 		}
-// 
-// 		//usleep(100000);
 // 	}
+///////////////////////
 
+	//DONE
 // 	std::cout << "reset all channels" << std::endl;
+// 	
 // 	!msi;
-
+// 
 // 	if (msi.readChannel(0) != 0) {
 // 		std::cout << "reset failed\n";
 // 	}
@@ -195,7 +210,7 @@ int main() {
 // 		std::cout << "reset successful\n";
 // 	}
 // 
-// 	std::cout << "completed\n";
+ 	std::cout << "completed\n";
 
 	return 0;
 }

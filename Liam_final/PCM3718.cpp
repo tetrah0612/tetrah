@@ -3,21 +3,6 @@
 #include <iostream>
 #include "PCM3718.h"
 
-#define B_5 0x00
-#define B_05 0x01
-#define B_005 0x02
-#define B_0005 0x03
-
-#define U_10 0x04
-#define U_1 0x05
-#define U_01 0x06
-#define U_001 0x07
-
-#define B_10 0x08
-#define B_1 0x09
-#define B_01 0x0A
-#define B_001 0x0B
-
 #define MAX_BITS 4095
 
 EmbeddedDevice::PCM3718::PCM3718(EmbeddedOperations* eops, uint32_t base_addr) {
@@ -91,6 +76,8 @@ bool EmbeddedDevice::PCM3718::digitalBitInput(uint8_t bit) {
 //Output the provided value to both low and high channels
 //Done: Tested
 void EmbeddedDevice::PCM3718::digitalOutput(uint16_t value){
+
+	//can do the shove the other bits into 8 bits
 	//Set and organise bits
 	uint8_t Set_Low = value & 0x00FF; //only consider bottom 8 bits
 	uint8_t Set_High = (value >> 8);
@@ -114,112 +101,81 @@ void EmbeddedDevice::PCM3718::digitalByteOutput(bool high_byte, uint8_t value) {
 }
 
 //Change the range for analog input to be the provided rangeCode (look in manual for range definitions)
+//Done: Tested
 void EmbeddedDevice::PCM3718::setRange(uint8_t new_analog_range) {
 	//Don't do any I/O operations
-	this->PCM_RANGE = new_analog_range;
+	PCM_RANGE = new_analog_range;
+	int i = 0;
+	int divide_10 = PCM_RANGE & 0x3;
+
+	if ((PCM_RANGE & 0xC) == 0) {
+		Max_Range = 5;
+	}
+	else if (PCM_RANGE & 0x4) { 
+		Max_Range = 10;
+	}
+	else if (PCM_RANGE & 0x8) {
+		Max_Range = 10;
+	}
+
+	if (PCM_RANGE & 0x4) {
+		Bipolar = 0;
+	}
+	else {
+		Bipolar = 1;
+	}
+
+	//Other Ranges are different by divide 10
+	while (i < divide_10) {
+		Max_Range = Max_Range * 0.1;
+		i++;
+	}
 }
 
 //Receive the input in the analog channel provided, convert it to a voltage (determined by the setRange) and return it
+//Done: Tested
 double EmbeddedDevice::PCM3718::analogInput(uint8_t channel) const {
 	//must be able to be any channel
 	// you can select the channel and then use that stored range to set the range for just that channel. 
 	
-	double voltage;
-	bool polarity; //Bipolar is 1, Unipolar is 0
-	double Range_Max;
-	uint8_t chan;
-	double gradient;
-	uint8_t Range = GetRange(); //returns range value
+	if(channel < 2){
+		uint8_t chan;
+		double voltage;
+		double gradient;
 
-
-	//READING
-	if (channel < 2) {
-		//Set range
-		outb(Range, PCM_BASE + 0x01);
+		//Read analog input procedure
 		//select channel
 		chan = channel | (channel << 4);
 		eops->outb(chan, PCM_BASE + 0x02);
-		//Sleep 0.1s
-		usleep(100000000);
-		eops->outb(0x00, PCM_BASE + 0x00); //trigger conversion
-		// Wait for conversion to complete
-		while (eops->inb(PCM_BASE + 0x08) & 0x80);
+		//select Range
+		eops->outb(PCM_RANGE, PCM_BASE + 1);
 		//Sleep
-		usleep(5000);
-		//read high and low and combine
-		uint16_t LowB = eops->inb(PCM_BASE + 0x00);	//Read low
-		uint16_t HighB = eops->inb(PCM_BASE + 0x01); 	//Read high
-		uint16_t Input_Contents = (LowB >> 4) | (HighB << 4); //combine low and high bytes
+		usleep(100000);
+		//trigger conversion
+		eops->outb(0x00, PCM_BASE);
+		//wait for conversion
+		while (eops->inb(PCM_BASE + 0x08) & 0x08);
+		//Read input
+		uint16_t LowB = eops->inb(PCM_BASE + 0x00); //read low
+		uint16_t HighB = eops->inb(PCM_BASE + 0x01); //read high
+		//Combine High and Low
+		uint16_t Input_Contents = (LowB >> 4) | (HighB << 4);
 
-	//CONVERTING TO VOLTAGE
-	//Determine max values for different input ranges set earlier
-	//Check Bipolar
-		if (Range == (B_5 | B_05 | B_005 | B_0005 | B_10 | B_1 | B_01 | B_001)) {
-			polarity = 1;
-			switch (Range) {
-			case B_5:
-				Range_Max = 5;
-				break;
-			case B_05:
-				Range_Max = 0.5;
-				break;
-			case B_005:
-				Range_Max = 0.05;
-				break;
-			case B_0005:
-				Range_Max = 0.005;
-				break;
-			case B_10:
-				Range_Max = 10;
-				break;
-			case B_1:
-				Range_Max = 1;
-				break;
-			case B_01:
-				Range_Max = 0.1;
-				break;
-			case B_001:
-				Range_Max = 0.01;
-				break;
-			}
-		} //Check Unipolar
-		else if (Range == (U_10 | U_1 | U_01 | U_001)) {
-			polarity = 0;
-			switch (Range) {
-			case U_10:
-				Range_Max = 10;
-				break;
-			case U_1:
-				Range_Max = 1;
-				break;
-			case U_01:
-				Range_Max = 0.1;
-				break;
-			case U_001:
-				Range_Max = 0.01;
-				break;
-			}
+		//Calculating the voltage using graph
+		//Do calcs depending on bipolar or not 
+		if (Bipolar == 0) {
+			gradient = (Max_Range) / MAX_BITS;
+			voltage = (Input_Contents * gradient);
 		}
-
-		//use range code and input from channel
-		//using calibration curve
-		//Utilise calibration curve to calculate Voltage
-		//Convert to voltage
-
-		if (polarity == 1) {
-			gradient = (2 * Range_Max) / MAX_BITS;  //split up to different slices (4095 slices)
-			voltage = (Input_Contents * gradient) - Range;
+		else if (Bipolar == 1) {
+			gradient = (2 * Max_Range) / MAX_BITS;
+			voltage = (Input_Contents * gradient) - Max_Range;
 		}
-		else if (polarity == 0) {
-			gradient = Range_Max / MAX_BITS;
-			voltage = Input_Contents * gradient;
-		}
-
-		//return voltage
 		return voltage;
 	}
 	else {
 		std::cout << "Incorrect channel input.  Accepts channels 0 to 1." << std::endl;
+		return 0;
 	}
 
 }
@@ -230,10 +186,4 @@ std::ostream& EmbeddedDevice::operator<<(std::ostream & output, const EmbeddedDe
 	//"channel 1: X  channel 2: Y"
 	std::cout << "Channel 0:" << pcm.analogInput(0);
 	std::cout << "	Channel 1:" << pcm.analogInput(1) << std::endl;
-}
-
-
-//Return the range
-uint8_t EmbeddedDevice::PCM3718::GetRange() const{
-	return PCM_RANGE;
 }

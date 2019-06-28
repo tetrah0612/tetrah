@@ -36,7 +36,9 @@ namespace EmbeddedDevice {
       EmbeddedOperations *eops;
 	  uint32_t PCM_BASE;
 	  uint8_t PCM_RANGE;
-	  uint8_t GetRange() const;
+	  bool Bipolar;
+	  double Max_Range;
+
   };
 
   // For newer versions of g++, a friend function needs a matching declaration provided

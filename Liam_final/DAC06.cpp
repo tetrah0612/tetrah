@@ -1,6 +1,6 @@
 ﻿#include <stdint.h>
 #include <iostream>
-#include <sys/io.h>
+//#include <sys/io.h>
 #include "EmbeddedOperations.h"
 #include "DAC06.h"
 
